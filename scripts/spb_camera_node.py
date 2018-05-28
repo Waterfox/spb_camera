@@ -37,7 +37,7 @@ class BeerDetector(object):
         #undistort
         img_dst = cv2.undistort(cv_img, self.mtx, self.dist, None, self.mtx)
         #crop
-        img_crop = img_dst[200:800,300:1000]
+        img_crop = img_dst[200::,400:900]
         #grayscale
         img_gray = cv2.cvtColor(img_crop,cv2.COLOR_BGR2GRAY)
         #HLS
@@ -75,7 +75,7 @@ class BeerDetector(object):
                     x1,y1,x2,y2 = line[0]
                     #filter by slope
                     m = (y2-y1)/(x2-x1)
-                    if abs(m) < 0.23:
+                    if abs(m) < 0.27:
                         cv2.line(line_img_hough,(x1,y1),(x2,y2),(255,0,255),2)
                         Y.append(y1)
                         Y.append(y2)
@@ -83,7 +83,7 @@ class BeerDetector(object):
         #find the mean Y value
         if len(Y) > 0:
             mY = int(np.mean(Y))
-        cv2.line(line_img,(0,mY),(650,mY),(255,255,0),2)
+        cv2.line(line_img,(0,mY),(650,mY),(255,255,0),8)
         img_out = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img, 1.,0.)
         img_out_hough = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img_hough, 1.,0.)
 
