@@ -43,10 +43,31 @@ class BeerDetector(object):
         #HLS
         img_hls = cv2.cvtColor(img_crop, cv2.COLOR_BGR2HLS).astype(np.float)
 
-        #Sobel Y
+
+        #Find the Lines
+        img_out, img_out_hough, range_sobely, mY = self.find_lines(img_hls,img_crop)
+
+        #convert cv2 image to ROS img
+        ros_img = self.bridge.cv2_to_imgmsg(img_out, "bgr8")
+        ros_hough_img = self.bridge.cv2_to_imgmsg(img_out_hough, "bgr8")
+
+        range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
+        ros_sobel_img = self.bridge.cv2_to_imgmsg(range_sobely_col, "bgr8")
+
+        #publishers
+        self.pub1.publish(ros_img)
+        self.pub2.publish(mY)
+        self.pub3.publish(ros_sobel_img)
+        self.pub4.publish(ros_hough_img)
+
+    def find_lines(self,img_hls,img_crop):
+
+        #Sobel Y---------
         sobel_kernel = 11
         kernel_size = 5
+        #Gaussian Blur
         blur_gray = cv2.GaussianBlur(img_hls[:,:,1],(kernel_size, kernel_size),0)
+        #Sobel Gradient in Y
         sobely = cv2.Sobel(blur_gray, cv2.CV_64F,0,1,ksize = sobel_kernel)
         abs_sobely = np.absolute(sobely)
         scaled_sobely=np.uint8(255*abs_sobely/np.max(abs_sobely))
@@ -87,21 +108,8 @@ class BeerDetector(object):
         img_out = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img, 1.,0.)
         img_out_hough = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img_hough, 1.,0.)
 
+        return img_out, img_out_hough, range_sobely, mY
 
-
-
-        #convert cv2 image to ROS img
-        ros_img = self.bridge.cv2_to_imgmsg(img_out, "bgr8")
-        ros_hough_img = self.bridge.cv2_to_imgmsg(img_out_hough, "bgr8")
-
-        range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
-        ros_sobel_img = self.bridge.cv2_to_imgmsg(range_sobely_col, "bgr8")
-
-        #publishers
-        self.pub1.publish(ros_img)
-        self.pub2.publish(mY)
-        self.pub3.publish(ros_sobel_img)
-        self.pub4.publish(ros_hough_img)
 
 
 if __name__ == '__main__':
