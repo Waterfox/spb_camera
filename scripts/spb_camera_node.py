@@ -17,10 +17,12 @@ class BeerDetector(object):
 
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
-        self.pub1 = rospy.Publisher('/spb/image_color', Image, queue_size=1)
-        self.pub2 = rospy.Publisher('/spb/level', Int32, queue_size=1)
+        self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
+        self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
         self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
         self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
+        self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
+        self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
 
         #load camera calibration
         camera_cal = pickle.load( open( "/home/robbie/spb_ws/src/spb_camera/camera_cal2.p", "rb" ) )
@@ -42,23 +44,44 @@ class BeerDetector(object):
         img_gray = cv2.cvtColor(img_crop,cv2.COLOR_BGR2GRAY)
         #HLS
         img_hls = cv2.cvtColor(img_crop, cv2.COLOR_BGR2HLS).astype(np.float)
+        #HSV
+        img_hsv = cv2.cvtColor(img_crop, cv2.COLOR_BGR2HSV)
 
 
         #Find the Lines
-        img_out, img_out_hough, range_sobely, mY = self.find_lines(img_hls,img_crop)
+        img_out_hough, range_sobely, lvl_lines = self.find_lines(img_hls,img_crop)
+
+        line_img1 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
+        cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(255,255,0),5)
+        img_out_lines = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img1, 1.,0.)
+
+        #Area filter
+        lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
+
+        line_img2 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
+        cv2.line(line_img2,(0,lvl_area),(line_img2.shape[0],lvl_area),(255,0,0),5)
+        img_out_area = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img2, 1.,0.)
+
+        img_out_area = cv2.addWeighted(img_out_area,0.8,mask_and_3, 1.,0.)
+
+
 
         #convert cv2 image to ROS img
-        ros_img = self.bridge.cv2_to_imgmsg(img_out, "bgr8")
+        ros_img_lines = self.bridge.cv2_to_imgmsg(img_out_lines, "bgr8")
         ros_hough_img = self.bridge.cv2_to_imgmsg(img_out_hough, "bgr8")
 
         range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
         ros_sobel_img = self.bridge.cv2_to_imgmsg(range_sobely_col, "bgr8")
 
+        ros_img_area = self.bridge.cv2_to_imgmsg(img_out_area, "bgr8")
+
         #publishers
-        self.pub1.publish(ros_img)
-        self.pub2.publish(mY)
+        self.pub1.publish(ros_img_lines)
+        self.pub2.publish(lvl_lines)
         self.pub3.publish(ros_sobel_img)
         self.pub4.publish(ros_hough_img)
+        self.pub5.publish(lvl_area)
+        self.pub6.publish(ros_img_area)
 
     def find_lines(self,img_hls,img_crop):
 
@@ -83,7 +106,7 @@ class BeerDetector(object):
         max_line_gap = 20    # maximum gap in pixels between connectable line segments
         lines = cv2.HoughLinesP(range_sobely, rho, theta, threshold, np.array([]), min_line_length, max_line_gap)
         #img with just one line
-        line_img = np.zeros((range_sobely.shape[0],range_sobely.shape[1],3), dtype=np.uint8)
+        # line_img = np.zeros((range_sobely.shape[0],range_sobely.shape[1],3), dtype=np.uint8)
         #img with all hough lines
         line_img_hough = np.zeros((range_sobely.shape[0],range_sobely.shape[1],3), dtype=np.uint8)
         #     print(lines)
@@ -99,17 +122,71 @@ class BeerDetector(object):
                     if abs(m) < 0.27:
                         cv2.line(line_img_hough,(x1,y1),(x2,y2),(255,0,255),2)
                         Y.append(y1)
-                        Y.append(y2)
+                        Y.append(y2) #finding more lines in the same area might weight the result in that region
                 # plt.imshow(line_img)
         #find the mean Y value
         if len(Y) > 0:
             mY = int(np.mean(Y))
-        cv2.line(line_img,(0,mY),(650,mY),(255,255,0),8)
-        img_out = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img, 1.,0.)
+        # cv2.line(line_img,(0,mY),(650,mY),(255,255,0),5)
+        # img_out = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img, 1.,0.)
         img_out_hough = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img_hough, 1.,0.)
 
-        return img_out, img_out_hough, range_sobely, mY
+        return img_out_hough, range_sobely, mY
 
+    def find_area(self,img_hsv, img_gray):
+        #threshold in HSV
+        lower_hsv = np.array([0, 0, 0])
+        upper_hsv = np.array([255, 255, 100])
+        mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
+        mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
+        #threshold in grayscale
+        lower_gray = 200
+        upper_gray = 255
+        mask_gray = cv2.inRange(np.uint8(img_gray*255),lower_gray,upper_gray)
+        mask_gray_3 = np.dstack([mask_gray*0,mask_gray*0,mask_gray*1])
+        #combine masks
+        mask_and = cv2.bitwise_and(mask_gray,mask_hsv)
+        mask_and_3 = np.dstack([mask_and*0,mask_and*0,mask_and*1])
+        #match filter - overkill, could just add lines
+        # target = mask_and.astype(np.float)
+        target = mask_gray.astype(np.float)
+
+        L_y = len(target[:,0])
+        L_x = len(target[0,:])
+        # print(L_x,L_y)
+        win_y = 5
+        win_x = L_x
+
+        #detection threshold = increase probability of line detection, sensitivity to noise
+        peak_thresh = 10 #threshold for detecting a peak in a single convolution line Note win_x size = 20  12/20 = 60% of pixels
+        peak_thresh = peak_thresh*win_y  #threshold for detecting a peak over the y_window
+
+        x_pos = list()
+        y_pos = list()
+
+        #convolution window. zeros with a ones in the center of length win_x
+        window = np.zeros_like(target[:,0])
+
+        window[int(L_y/2-win_y/2):int(L_y/2+win_y/2)] = 1.0
+
+        conv=np.zeros_like(window)
+        # for xi in range(int(L_x/2-1),int(L_x/2+1)):
+        for xi in range(L_x):
+            line_conv = np.convolve(target[:,xi],window,mode='same')
+            conv = conv + line_conv
+        #     plt.plot(line_conv)
+
+        line_thresh = 0.8
+        beer_line = 0
+        for yi in range(L_y):
+            if (conv[yi] > (line_thresh * 255.0 * L_x)):
+                beer_line = yi;
+                break
+
+
+        # return beer_line,mask_and_3
+        # mask_gray_3
+        return beer_line,mask_gray_3
 
 
 if __name__ == '__main__':
