@@ -7,6 +7,16 @@ from cv_bridge import CvBridge
 import cv2
 import pickle
 
+class surface_line(object):
+    def __init__(self):
+        self.locked_on = False
+        self.detected = False #was the most recent frame detected
+        self.y_val = 0
+        self.confidence = 0
+
+        self.max_confidence = 20
+        self.locked_thresh = 5
+
 class BeerDetector(object):
     def __init__(self):
         rospy.init_node('beer_detector')
@@ -48,31 +58,34 @@ class BeerDetector(object):
         img_hsv = cv2.cvtColor(img_crop, cv2.COLOR_BGR2HSV)
 
 
-        #Find the Lines
+        #Find the Lines --------------
         img_out_hough, range_sobely, lvl_lines = self.find_lines(img_hls,img_crop)
 
         line_img1 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
         cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(255,255,0),5)
-        img_out_lines = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img1, 1.,0.)
+        # img_out_lines = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img1, 1.,0.)
+        img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
+        range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
 
-        #Area filter
+        #Area filter ------------------
         lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
 
         line_img2 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
         cv2.line(line_img2,(0,lvl_area),(line_img2.shape[0],lvl_area),(255,0,0),5)
-        img_out_area = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img2, 1.,0.)
+        img_out_area = cv2.addWeighted(img_crop,0.8,line_img2, 1.,0.)
 
         img_out_area = cv2.addWeighted(img_out_area,0.8,mask_and_3, 1.,0.)
 
 
+        #combine surface lvls from lines and area filters
+
+
 
         #convert cv2 image to ROS img
+        # ros_img_lines = self.bridge.cv2_to_imgmsg(img_out_lines, "bgr8")
         ros_img_lines = self.bridge.cv2_to_imgmsg(img_out_lines, "bgr8")
         ros_hough_img = self.bridge.cv2_to_imgmsg(img_out_hough, "bgr8")
-
-        range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
         ros_sobel_img = self.bridge.cv2_to_imgmsg(range_sobely_col, "bgr8")
-
         ros_img_area = self.bridge.cv2_to_imgmsg(img_out_area, "bgr8")
 
         #publishers
@@ -83,34 +96,41 @@ class BeerDetector(object):
         self.pub5.publish(lvl_area)
         self.pub6.publish(ros_img_area)
 
-    def find_lines(self,img_hls,img_crop):
+    def reject_outliers(self,data, m = 1.):
+        d = np.abs(data - np.median(data))
+        mdev = np.median(d)
+        s = d/mdev if mdev else 0.
+        return data[s<m]
 
+    def find_lines(self,img_hls,img_crop):
+        #HLS: 0: HUE, 1: LIGHTNESS, 2: SATURATION
         #Sobel Y---------
         sobel_kernel = 11
-        kernel_size = 5
+        kernel_size = 3
         #Gaussian Blur
-        blur_gray = cv2.GaussianBlur(img_hls[:,:,1],(kernel_size, kernel_size),0)
+        blur_gray = cv2.GaussianBlur(img_hls[:,:,0],(kernel_size, kernel_size),0)
         #Sobel Gradient in Y
         sobely = cv2.Sobel(blur_gray, cv2.CV_64F,0,1,ksize = sobel_kernel)
         abs_sobely = np.absolute(sobely)
         scaled_sobely=np.uint8(255*abs_sobely/np.max(abs_sobely))
 
         #range filter
-        range_sobely = cv2.inRange(scaled_sobely,165,255)
+        range_sobely = cv2.inRange(scaled_sobely,100,255)
 
         #Hough lines
         rho = 1 # distance resolution in pixels of the Hough grid
         theta = np.pi/180 # angular resolution in radians of the Hough grid
         threshold = 12    # minimum number of votes (intersections in Hough grid cell)
         min_line_length = 45 #minimum number of pixels making up a line
-        max_line_gap = 20    # maximum gap in pixels between connectable line segments
+        max_line_gap = 10   # maximum gap in pixels between connectable line segments
         lines = cv2.HoughLinesP(range_sobely, rho, theta, threshold, np.array([]), min_line_length, max_line_gap)
         #img with just one line
         # line_img = np.zeros((range_sobely.shape[0],range_sobely.shape[1],3), dtype=np.uint8)
         #img with all hough lines
         line_img_hough = np.zeros((range_sobely.shape[0],range_sobely.shape[1],3), dtype=np.uint8)
         #     print(lines)
-        Y = []
+        Y = [] #yvalues
+        W = [] #weights
         mY = 0
 
         if lines is not None:
@@ -126,17 +146,17 @@ class BeerDetector(object):
                 # plt.imshow(line_img)
         #find the mean Y value
         if len(Y) > 0:
-            mY = int(np.mean(Y))
+            mY = int(np.mean(self.reject_outliers(np.array(Y))))  # average of all Y values
         # cv2.line(line_img,(0,mY),(650,mY),(255,255,0),5)
         # img_out = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img, 1.,0.)
-        img_out_hough = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img_hough, 1.,0.)
+        img_out_hough = cv2.addWeighted(img_crop,0.8,line_img_hough, 1.,0.)
 
         return img_out_hough, range_sobely, mY
 
     def find_area(self,img_hsv, img_gray):
         #threshold in HSV
         lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([255, 255, 100])
+        upper_hsv = np.array([42, 255, 255]) #red
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
         #threshold in grayscale
@@ -149,7 +169,8 @@ class BeerDetector(object):
         mask_and_3 = np.dstack([mask_and*0,mask_and*0,mask_and*1])
         #match filter - overkill, could just add lines
         # target = mask_and.astype(np.float)
-        target = mask_gray.astype(np.float)
+        # target = mask_gray.astype(np.float)
+        target = mask_hsv.astype(np.float)
 
         L_y = len(target[:,0])
         L_x = len(target[0,:])
@@ -179,14 +200,15 @@ class BeerDetector(object):
         line_thresh = 0.8
         beer_line = 0
         for yi in range(L_y):
-            if (conv[yi] > (line_thresh * 255.0 * L_x)):
+            if (conv[yi] > (line_thresh * 255.0 * L_x * win_y/2.0)):
                 beer_line = yi;
                 break
 
 
         # return beer_line,mask_and_3
         # mask_gray_3
-        return beer_line,mask_gray_3
+        # return beer_line,mask_gray_3
+        return beer_line,mask_hsv_3
 
 
 if __name__ == '__main__':
