@@ -13,9 +13,26 @@ class surface_line(object):
         self.detected = False #was the most recent frame detected
         self.y_val = 0
         self.confidence = 0
+        self.iteration = 0
+        self.mv_avg = 5
 
         self.max_confidence = 20
         self.locked_thresh = 5
+
+    def update_sl(self,lvl): #update the tracker
+        if lvl > 0:  #if we find a line, raise the confidence
+            self.confidence = min(self.max_confidence, self.confidence + 1)
+            self.iteration = min(self.mv_avg,self.iteration + 1)
+            self.y_val = self.y_val*(self.iteration - 1) / self.iteration + lvl / (self.iteration)
+        else:    #if we don't find a line, lower the confidence
+            self.confidence = max(0, self.confidence - 1)
+
+        if self.confidence > self.locked_thresh:
+            self.locked_on = True
+        else:
+            self.locked_on = False
+
+
 
 class BeerDetector(object):
     def __init__(self):
@@ -39,17 +56,38 @@ class BeerDetector(object):
         self.ret = camera_cal[0]
         self.mtx = camera_cal[1]
         self.dist = camera_cal[2]
+        self.line_tracker = surface_line()
+        self.area_tracker = surface_line()
+
+        self.cropTop = 300
+        self.cropBot = 700
 
         rospy.spin()
 
+    def pix2dist(self,lvl_pix):
+
+        y1 = 130.
+        x1 = 300.
+        y2 = 193.
+        x2 = 700.
+
+        lvl = lvl_pix + self.cropTop
+
+        m = (y2-y1)/(x2-x1)
+        b = 130 - m * 300
+        return m*lvl+b
+
+
     def image_cb(self, msg):
+        topCrop = 300
+        botCrop = 700
 
         #convert ROS img msg to OpenCV
         cv_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         #undistort
         img_dst = cv2.undistort(cv_img, self.mtx, self.dist, None, self.mtx)
         #crop
-        img_crop = img_dst[200::,400:900]
+        img_crop = img_dst[self.cropTop:self.cropBot,400:900]
         #grayscale
         img_gray = cv2.cvtColor(img_crop,cv2.COLOR_BGR2GRAY)
         #HLS
@@ -78,6 +116,12 @@ class BeerDetector(object):
 
 
         #combine surface lvls from lines and area filters
+        self.line_tracker.update_sl(lvl_lines)
+        self.area_tracker.update_sl(lvl_area)
+
+        print(self.pix2dist(self.line_tracker.y_val))
+
+
 
 
 
@@ -104,18 +148,21 @@ class BeerDetector(object):
 
     def find_lines(self,img_hls,img_crop):
         #HLS: 0: HUE, 1: LIGHTNESS, 2: SATURATION
+        L_y = len(img_hls[:,0])
+        L_x = len(img_hls[0,:])
+
         #Sobel Y---------
         sobel_kernel = 11
         kernel_size = 3
         #Gaussian Blur
-        blur_gray = cv2.GaussianBlur(img_hls[:,:,0],(kernel_size, kernel_size),0)
+        blur_gray = cv2.GaussianBlur(img_hls[:,:,1],(kernel_size, kernel_size),0)
         #Sobel Gradient in Y
         sobely = cv2.Sobel(blur_gray, cv2.CV_64F,0,1,ksize = sobel_kernel)
         abs_sobely = np.absolute(sobely)
         scaled_sobely=np.uint8(255*abs_sobely/np.max(abs_sobely))
 
         #range filter
-        range_sobely = cv2.inRange(scaled_sobely,100,255)
+        range_sobely = cv2.inRange(scaled_sobely,45,255)
 
         #Hough lines
         rho = 1 # distance resolution in pixels of the Hough grid
@@ -133,20 +180,22 @@ class BeerDetector(object):
         W = [] #weights
         mY = 0
 
+        #iterate through the lines and filter by the slope
         if lines is not None:
             if len(lines) > 0:
                 for line in lines:
                     x1,y1,x2,y2 = line[0]
                     #filter by slope
                     m = (y2-y1)/(x2-x1)
-                    if abs(m) < 0.27:
+                    if abs(m) < 0.27 and x2 > L_x / 2.0:
                         cv2.line(line_img_hough,(x1,y1),(x2,y2),(255,0,255),2)
                         Y.append(y1)
                         Y.append(y2) #finding more lines in the same area might weight the result in that region
                 # plt.imshow(line_img)
         #find the mean Y value
         if len(Y) > 0:
-            mY = int(np.mean(self.reject_outliers(np.array(Y))))  # average of all Y values
+            # mY = int(np.mean(self.reject_outliers(np.array(Y))))  # average of all Y values
+            mY = int(np.mean(Y))
         # cv2.line(line_img,(0,mY),(650,mY),(255,255,0),5)
         # img_out = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img, 1.,0.)
         img_out_hough = cv2.addWeighted(img_crop,0.8,line_img_hough, 1.,0.)
@@ -155,8 +204,8 @@ class BeerDetector(object):
 
     def find_area(self,img_hsv, img_gray):
         #threshold in HSV
-        lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([42, 255, 255]) #red
+        lower_hsv = np.array([150, 0, 0])
+        upper_hsv = np.array([200, 255, 255]) #red
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
         #threshold in grayscale
