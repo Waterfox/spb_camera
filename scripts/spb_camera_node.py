@@ -6,6 +6,7 @@ from std_msgs.msg import Int32
 from cv_bridge import CvBridge
 import cv2
 import pickle
+import serial
 
 class surface_line(object):
     def __init__(self):
@@ -61,6 +62,8 @@ class BeerDetector(object):
 
         self.cropTop = 300
         self.cropBot = 700
+
+        self.ser = ser = serial.Serial('/dev/ttyACM0',115200, timeout=0)
 
         rospy.spin()
 
@@ -119,9 +122,18 @@ class BeerDetector(object):
         self.line_tracker.update_sl(lvl_lines)
         self.area_tracker.update_sl(lvl_area)
 
-        print(self.pix2dist(self.line_tracker.y_val))
+        if self.line_tracker.locked_on == True and self.area_tracker.locked_on == True:
+            output = (self.line_tracker.y_val + self.area_tracker.y_val)*0.5
+        elif self.line_tracker.locked_on == True and self.area_tracker.locked_on == False:
+            output = self.line_tracker.y_val
+        elif self.line_tracker.locked_on == False and self.area_tracker.locked_on == True:
+            output = self.area_tracker.y_val
+        else:
+             output = 0
 
-
+        output = self.pix2dist(output)
+        print(output)
+        self.ser.write(str(output)+"\n")
 
 
 
