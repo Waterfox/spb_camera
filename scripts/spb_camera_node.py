@@ -3,10 +3,11 @@ import rospy
 import numpy as np
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int32
+from std_msgs.msg import UInt16
 from cv_bridge import CvBridge
 import cv2
 import pickle
-import serial
+# import serial
 
 class surface_line(object):
     def __init__(self):
@@ -51,6 +52,7 @@ class BeerDetector(object):
         self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
         self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
         self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
+        self.pub7 = rospy.Publisher('/spb/lvl', UInt16, queue_size=1)
 
         #load camera calibration
         camera_cal = pickle.load( open( "/home/robbie/spb_ws/src/spb_camera/camera_cal2.p", "rb" ) )
@@ -60,10 +62,10 @@ class BeerDetector(object):
         self.line_tracker = surface_line()
         self.area_tracker = surface_line()
 
-        self.cropTop = 300
-        self.cropBot = 700
+        self.cropTop = 400
+        self.cropBot = 1000
 
-        self.ser = ser = serial.Serial('/dev/ttyACM0',115200, timeout=0)
+        # self.ser = ser = serial.Serial('/dev/ttyACM0',115200, timeout=0)
 
         rospy.spin()
 
@@ -82,8 +84,7 @@ class BeerDetector(object):
 
 
     def image_cb(self, msg):
-        topCrop = 300
-        botCrop = 700
+
 
         #convert ROS img msg to OpenCV
         cv_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -122,6 +123,7 @@ class BeerDetector(object):
         self.line_tracker.update_sl(lvl_lines)
         self.area_tracker.update_sl(lvl_area)
 
+        #Take the output of the tracker
         if self.line_tracker.locked_on == True and self.area_tracker.locked_on == True:
             output = (self.line_tracker.y_val + self.area_tracker.y_val)*0.5
         elif self.line_tracker.locked_on == True and self.area_tracker.locked_on == False:
@@ -133,7 +135,7 @@ class BeerDetector(object):
 
         output = self.pix2dist(output)
         print(output)
-        self.ser.write(str(output)+"\n")
+        # self.ser.write(str(output)+"\n")
 
 
 
@@ -151,6 +153,8 @@ class BeerDetector(object):
         self.pub4.publish(ros_hough_img)
         self.pub5.publish(lvl_area)
         self.pub6.publish(ros_img_area)
+        self.pub7.publish(output)
+
 
     def reject_outliers(self,data, m = 1.):
         d = np.abs(data - np.median(data))
