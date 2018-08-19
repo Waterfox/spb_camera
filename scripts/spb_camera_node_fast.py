@@ -49,12 +49,12 @@ class BeerDetector(object):
 
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
-        self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
+        # self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
         self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
-        self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
-        self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
+        # self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
+        # self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
         self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
-        self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
+        # self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
         self.pub7 = rospy.Publisher('/spb/lvl', UInt16, queue_size=1)
         self.pub8 = rospy.Publisher('/spb/image_output', Image, queue_size=1)
         #load camera calibration
@@ -69,6 +69,9 @@ class BeerDetector(object):
         self.cropBot = 1000
         self.cropLeft = 400
         self.cropRight = 750
+
+        self.USE_LINES = False
+        self.USE_AREA = True
 
         # self.ser = ser = serial.Serial('/dev/ttyACM0',115200, timeout=0)
         rate = rospy.Rate(20)
@@ -107,27 +110,29 @@ class BeerDetector(object):
 
 
         #Find the Lines --------------
-        img_out_hough, range_sobely, lvl_lines = self.find_lines(img_hls,img_crop)
+        if self.USE_LINES:
+            img_out_hough, range_sobely, lvl_lines = self.find_lines(img_hls,img_crop)
+            self.line_tracker.update_sl(lvl_lines)
 
-        line_img1 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
-        cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(255,255,0),5)
+        # line_img1 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
+        # cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(255,255,0),5)
         # img_out_lines = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img1, 1.,0.)
-        img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
-        range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
+        # img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
+        # range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
 
         #Area filter ------------------
-        lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
+        if self.USE_AREA:
+            lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
+            self.area_tracker.update_sl(lvl_area)
 
-        area_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
-        cv2.line(area_img,(0,lvl_area),(area_img.shape[0],lvl_area),(255,0,0),5)
-        img_out_area = cv2.addWeighted(img_crop,0.8,area_img, 1.,0.)
+        # area_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
+        # cv2.line(area_img,(0,lvl_area),(area_img.shape[0],lvl_area),(255,0,0),5)
+        # img_out_area = cv2.addWeighted(img_crop,0.8,area_img, 1.,0.)
 
-        img_out_area = cv2.addWeighted(img_out_area,0.8,mask_and_3, 1.,0.)
+        # img_out_area = cv2.addWeighted(img_out_area,0.8,mask_and_3, 1.,0.)
 
 
         #combine surface lvls from lines and area filters
-        self.line_tracker.update_sl(lvl_lines)
-        self.area_tracker.update_sl(lvl_area)
 
         #Take the output of the tracker
         if self.line_tracker.locked_on == True and self.area_tracker.locked_on == True:
@@ -153,19 +158,21 @@ class BeerDetector(object):
 
         #convert cv2 image to ROS img
         # ros_img_lines = self.bridge.cv2_to_imgmsg(img_out_lines, "bgr8")
-        ros_img_lines = self.bridge.cv2_to_imgmsg(img_out_lines, "bgr8")
-        ros_hough_img = self.bridge.cv2_to_imgmsg(img_out_hough, "bgr8")
-        ros_sobel_img = self.bridge.cv2_to_imgmsg(range_sobely_col, "bgr8")
-        ros_img_area = self.bridge.cv2_to_imgmsg(img_out_area, "bgr8")
+        # ros_img_lines = self.bridge.cv2_to_imgmsg(img_out_lines, "bgr8")
+        # ros_hough_img = self.bridge.cv2_to_imgmsg(img_out_hough, "bgr8")
+        # ros_sobel_img = self.bridge.cv2_to_imgmsg(range_sobely_col, "bgr8")
+        # ros_img_area = self.bridge.cv2_to_imgmsg(img_out_area, "bgr8")
         ros_img_output = self.bridge.cv2_to_imgmsg(img_output, "bgr8")
 
         #publishers
-        self.pub1.publish(ros_img_lines)
-        self.pub2.publish(lvl_lines)
-        self.pub3.publish(ros_sobel_img)
-        self.pub4.publish(ros_hough_img)
-        self.pub5.publish(lvl_area)
-        self.pub6.publish(ros_img_area)
+        # self.pub1.publish(ros_img_lines)
+        if self.USE_LINES:
+            self.pub2.publish(lvl_lines)
+        # self.pub3.publish(ros_sobel_img)
+        # self.pub4.publish(ros_hough_img)
+        if self.USE_AREA:
+            self.pub5.publish(lvl_area)
+        # self.pub6.publish(ros_img_area)
         self.pub7.publish(output_mm)
         self.pub8.publish(ros_img_output)
 
