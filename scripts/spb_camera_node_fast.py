@@ -16,7 +16,7 @@ class surface_line(object):
         self.y_val = 0
         self.confidence = 0
         self.iteration = 0
-        self.mv_avg = 5
+        self.mv_avg = 4
 
         self.max_confidence = 20
         self.locked_thresh = 5
@@ -26,9 +26,9 @@ class surface_line(object):
             self.confidence = min(self.max_confidence, self.confidence + 1)
             self.iteration = min(self.mv_avg,self.iteration + 1)
             #Moving average
-            # self.y_val = self.y_val*(self.iteration - 1) / self.iteration + lvl / (self.iteration)
+            self.y_val = self.y_val*(self.iteration - 1) / self.iteration + lvl / (self.iteration)
             #last lvl
-            self.y_val = lvl
+            # self.y_val = lvl
         else:    #if we don't find a line, lower the confidence
             self.confidence = max(0, self.confidence - 1)
 
@@ -70,8 +70,8 @@ class BeerDetector(object):
         self.cropLeft = 400
         self.cropRight = 750
 
-        self.USE_LINES = False
-        self.USE_AREA = True
+        self.USE_LINES = True
+        self.USE_AREA = False
 
         # self.ser = ser = serial.Serial('/dev/ttyACM0',115200, timeout=0)
         rate = rospy.Rate(20)
