@@ -106,7 +106,7 @@ class beerClassifier(object):
             ## Restore saved checkpoint ----------------
             saver.restore(self.sess, "/home/robbie/spb_data/models/model.ckpt")
             print("Model restored.")
-            self.run()
+            # self.run()
 
     def run_classifier(self,image):
         ##check if image has proper shape)
@@ -145,8 +145,11 @@ class beerClassifier(object):
         image_out3 = scipy.misc.toimage(image)
         image_out3.paste(mask3, box=None, mask=mask1)
 
+        ## Save an example image----------- used for testing
         # output_dir = os.path.join(self.runs_dir, str(time.time()))
-        scipy.misc.imsave(os.path.join(self.data_dir, 'test', '0106_out.png'), image_out)
+        # scipy.misc.imsave(os.path.join(self.data_dir, 'test', '0106_out.png'), image_out1)
+
+        return image_out1, image_out2, image_out3
 
     def run(self):
         image_file = os.path.join(self.data_dir, 'test', '0106.png')
