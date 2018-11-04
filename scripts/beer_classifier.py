@@ -112,7 +112,7 @@ class beerClassifier(object):
         ##check if image has proper shape)
         if image.shape != self.image_shape:
             image = scipy.misc.imresize(image, self.image_shape)
-
+        ##Run the model --------------------------------------
         im_softmax = self.sess.run(
             [tf.nn.softmax(self.logits)],
             {self.keep_prob: 1.0, self.input_image: [image]})
@@ -122,9 +122,28 @@ class beerClassifier(object):
         segmentation1 = (im_softmax1 > 0.5).reshape(self.image_shape[0], self.image_shape[1], 1)
         mask1 = np.dot(segmentation1, np.array([[0, 255, 0, 200]]))
         mask1 = scipy.misc.toimage(mask1, mode="RGBA")
+        #class 2 foam
+        im_softmax2 = im_softmax[0][:, 2].reshape(image_shape[0], image_shape[1])
+        segmentation2 = (im_softmax2 > 0.5).reshape(image_shape[0], image_shape[1], 1)
+        mask2 = np.dot(segmentation2, np.array([[255, 0, 0, 200]]))
+        mask2 = scipy.misc.toimage(mask2, mode="RGBA")
+        #class 3 glass
+        im_softmax3 = im_softmax[0][:, 3].reshape(image_shape[0], image_shape[1])
+        segmentation3 = (im_softmax3 > 0.5).reshape(image_shape[0], image_shape[1], 1)
+        mask3 = np.dot(segmentation3, np.array([[0, 0, 255, 200]]))
+        mask3 = scipy.misc.toimage(mask3, mode="RGBA")
+        #class 0 background
+        # im_softmax4 = im_softmax[0][:, 0].reshape(image_shape[0], image_shape[1])
+        # segmentation4 = (im_softmax4 > 0.5).reshape(image_shape[0], image_shape[1], 1)
+        # mask4 = np.dot(segmentation4, np.array([[200, 200, 200, 200]]))
+        # mask4 = scipy.misc.toimage(mask3, mode="RGBA")
 
-        image_out = scipy.misc.toimage(image)
-        image_out.paste(mask1, box=None, mask=mask1)
+        image_out1 = scipy.misc.toimage(image)
+        image_out1.paste(mask1, box=None, mask=mask1)
+        image_out2 = scipy.misc.toimage(image)
+        image_out2.paste(mask2, box=None, mask=mask1)
+        image_out3 = scipy.misc.toimage(image)
+        image_out3.paste(mask3, box=None, mask=mask1)
 
         # output_dir = os.path.join(self.runs_dir, str(time.time()))
         scipy.misc.imsave(os.path.join(self.data_dir, 'test', '0106_out.png'), image_out)
