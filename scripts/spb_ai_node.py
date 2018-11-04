@@ -8,6 +8,7 @@ from cv_bridge import CvBridge
 import cv2
 import pickle
 from beer_classifier import beerClassifier
+import time
 # import serial
 
 class surface_line(object):
@@ -48,17 +49,32 @@ class BeerDetector(object):
         self.camera_image = None
         self.bridge = CvBridge()
 
+
+        self.USE_LINES = False
+        self.USE_AREA = False
+        self.USE_AI = True
+
+        if self.USE_AI:
+            self.beerClassifier = beerClassifier()
+            while self.beerClassifier.model_ready == False:
+                time.sleep(0.5)
+
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
-        self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
-        self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
-        self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
-        self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
-        self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
-        self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
+        if self.USE_LINES:
+            self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
+            self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
+            self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
+            self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
+        if self.USE_AREA:
+            self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
+            self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
         self.pub7 = rospy.Publisher('/spb/lvl', UInt16, queue_size=1)
         self.pub8 = rospy.Publisher('/spb/image_output', Image, queue_size=1)
-        self.pub9 = rospy.Publisher('/spb/image_ai_beer', Image, queue_size=1)
+        if self.USE_AI:
+            self.pub9 = rospy.Publisher('/spb/image_ai_beer', Image, queue_size=1)
+            self.pub10 = rospy.Publisher('/spb/image_ai_foam', Image, queue_size=1)
+            self.pub11 = rospy.Publisher('/spb/image_ai_glass', Image, queue_size=1)
         #load camera calibration
         camera_cal = pickle.load( open( "/home/robbie/spb_ws/src/spb_camera/camera_cal2.p", "rb" ) )
         self.ret = camera_cal[0]
@@ -67,17 +83,13 @@ class BeerDetector(object):
         self.line_tracker = surface_line()
         self.area_tracker = surface_line()
 
+        self.img_shape = (964,1296)
         self.cropTop = 400
         self.cropBot = 1000
         self.cropLeft = 400
         self.cropRight = 750
 
-        self.USE_LINES = False
-        self.USE_AREA = False
-        self.USE_AI = True
 
-        if self.USE_AI:
-            self.beerClassifier = beerClassifier()
 
         rate = rospy.Rate(20)
         rate.sleep()
@@ -102,6 +114,8 @@ class BeerDetector(object):
 
         #convert ROS img msg to OpenCV
         cv_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+        cv_img1 = self.bridge.imgmsg_to_cv2(msg, "rgb8") #for AI
+        # if self.USE_LINES or self.USE_AREA:
         #undistort
         img_dst = cv2.undistort(cv_img, self.mtx, self.dist, None, self.mtx)
         #crop
@@ -143,12 +157,22 @@ class BeerDetector(object):
 
         #AI (semantic segmentation) filter
         if self.USE_AI:
-            img_beer, img_foam, img_glass = self.beerClassifier.run_classifier(cv_img)
+            img_beer, img_foam, img_glass = self.beerClassifier.run_classifier(cv_img1)
             #resize the classified image, undistort it, crop it, find the top of the beer
-            img_beer_res = cv2.resize(img_beer,cv_img.shape)
-            img_beer_dst = cv2.undistort(img_beer_res, self.mtx, self.dist, None, self.mtx)
-            img_beer_crop = img_beer_dst[self.cropTop:self.cropBot,self.cropLeft:self.cropRight]
-            pass
+
+            img_beer = np.array(img_beer)
+            img_foam = np.array(img_foam)
+            img_glass = np.array(img_glass)
+            # Convert RGB to BGR
+            img_beer = img_beer[:, :, ::-1].copy()
+            img_foam = img_foam[:, :, ::-1].copy()
+            img_glass = img_glass[:, :, ::-1].copy()
+
+
+            # img_beer_res = cv2.resize(img_beer,self.img_shape)
+            # img_beer_dst = cv2.undistort(img_beer_res, self.mtx, self.dist, None, self.mtx)
+            # img_beer_crop = img_beer_dst[self.cropTop:self.cropBot,self.cropLeft:self.cropRight]
+
 
 
         #combine surface lvls from lines and area filters
@@ -164,7 +188,7 @@ class BeerDetector(object):
              pix_output = 0
 
         #make the final output image
-        out_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
+        out_img = np.zeros((img_crop.shape[0],img_crop.shape[1],3), dtype=np.uint8)
         cv2.line(out_img,(0,int(pix_output)),(650,int(pix_output)),(250,0,180),5)
         img_output = cv2.addWeighted(img_crop,0.8,out_img, 1.,0.)
 
@@ -185,9 +209,11 @@ class BeerDetector(object):
         if self.USE_AREA:
             ros_img_area = self.bridge.cv2_to_imgmsg(img_out_area, "bgr8")
         if self.USE_AI:
-            ros_img_ai = self.bridge.cv2_to_imgmsg(img_out_area, "bgr8")
+            ros_img_ai_beer = self.bridge.cv2_to_imgmsg(img_beer, "bgr8")
+            ros_img_ai_foam = self.bridge.cv2_to_imgmsg(img_foam, "bgr8")
+            ros_img_ai_glass = self.bridge.cv2_to_imgmsg(img_glass, "bgr8")
 
-        ros_img_output = self.bridge.cv2_to_imgmsg(img_beer_crop, "bgr8")
+        ros_img_output = self.bridge.cv2_to_imgmsg(img_output, "bgr8")
 
         #publishers
 
@@ -200,7 +226,9 @@ class BeerDetector(object):
             self.pub5.publish(lvl_area)
             self.pub6.publish(ros_img_area)
         if self.USE_AI:
-            self.pub9.publish(ros_img_ai)
+            self.pub9.publish(ros_img_ai_beer)
+            self.pub10.publish(ros_img_ai_foam)
+            self.pub11.publish(ros_img_ai_glass)
 
         self.pub7.publish(output_mm)
         self.pub8.publish(ros_img_output)

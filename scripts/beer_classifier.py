@@ -2,6 +2,7 @@ import tensorflow as tf
 import os.path
 import scipy.misc
 import numpy as np
+import cv2
 
 def load_vgg(sess, vgg_path):
     """
@@ -95,20 +96,27 @@ class beerClassifier(object):
         self.data_dir = "/home/robbie/spb_data"
         self.runs_dir = "/home/robbie/spb_data"
         self.training_dir = "/home/robbie/spb_data/data_beer/training"
+        self.model_ready = False
 
-        with tf.Session() as self.sess:
-            #load layers from vgg: input, layer3, layer4, later 7
-            self.input_image, self.keep_prob, vgg_layer3_out, vgg_layer4_out, vgg_layer7_out = load_vgg(self.sess, self.vgg_path)
-            #create new layers with layers from vgg
-            nn_last_layer = layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, self.num_classes)
-            saver = tf.train.Saver()
-            self.logits = tf.reshape(nn_last_layer, (-1, self.num_classes))
-            ## Restore saved checkpoint ----------------
-            saver.restore(self.sess, "/home/robbie/spb_data/models/model.ckpt")
-            print("Model restored.")
-            # self.run()
+        self.sess = tf.Session()
+        #load layers from vgg: input, layer3, layer4, later 7
+        self.input_image, self.keep_prob, vgg_layer3_out, vgg_layer4_out, vgg_layer7_out = load_vgg(self.sess, self.vgg_path)
+        #create new layers with layers from vgg
+        nn_last_layer = layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, self.num_classes)
+        saver = tf.train.Saver()
+        self.logits = tf.reshape(nn_last_layer, (-1, self.num_classes))
+        ## Restore saved checkpoint ----------------
+        saver.restore(self.sess, "/home/robbie/spb_data/models/model.ckpt")
+        print("Model restored.")
+        self.model_ready = True
+
+    def __del__(self):
+        self.sess.close()
 
     def run_classifier(self,image):
+        ## Input is RGB
+        ## Output is RGB
+
         ##check if image has proper shape)
         if image.shape != self.image_shape:
             image = scipy.misc.imresize(image, self.image_shape)
@@ -123,13 +131,13 @@ class beerClassifier(object):
         mask1 = np.dot(segmentation1, np.array([[0, 255, 0, 200]]))
         mask1 = scipy.misc.toimage(mask1, mode="RGBA")
         #class 2 foam
-        im_softmax2 = im_softmax[0][:, 2].reshape(image_shape[0], image_shape[1])
-        segmentation2 = (im_softmax2 > 0.5).reshape(image_shape[0], image_shape[1], 1)
+        im_softmax2 = im_softmax[0][:, 2].reshape(self.image_shape[0], self.image_shape[1])
+        segmentation2 = (im_softmax2 > 0.5).reshape(self.image_shape[0], self.image_shape[1], 1)
         mask2 = np.dot(segmentation2, np.array([[255, 0, 0, 200]]))
         mask2 = scipy.misc.toimage(mask2, mode="RGBA")
         #class 3 glass
-        im_softmax3 = im_softmax[0][:, 3].reshape(image_shape[0], image_shape[1])
-        segmentation3 = (im_softmax3 > 0.5).reshape(image_shape[0], image_shape[1], 1)
+        im_softmax3 = im_softmax[0][:, 3].reshape(self.image_shape[0], self.image_shape[1])
+        segmentation3 = (im_softmax3 > 0.5).reshape(self.image_shape[0], self.image_shape[1], 1)
         mask3 = np.dot(segmentation3, np.array([[0, 0, 255, 200]]))
         mask3 = scipy.misc.toimage(mask3, mode="RGBA")
         #class 0 background
@@ -141,9 +149,15 @@ class beerClassifier(object):
         image_out1 = scipy.misc.toimage(image)
         image_out1.paste(mask1, box=None, mask=mask1)
         image_out2 = scipy.misc.toimage(image)
-        image_out2.paste(mask2, box=None, mask=mask1)
+        image_out2.paste(mask2, box=None, mask=mask2)
         image_out3 = scipy.misc.toimage(image)
-        image_out3.paste(mask3, box=None, mask=mask1)
+        image_out3.paste(mask3, box=None, mask=mask3)
+
+        # image_out1 = np.zeros((160,320,3), dtype=np.uint8)
+        # print type(mask1)
+        # print mask1.size
+        # image_out1 = cv2.add(image,mask1)
+
 
         ## Save an example image----------- used for testing
         # output_dir = os.path.join(self.runs_dir, str(time.time()))
