@@ -94,7 +94,6 @@ class beerClassifier(object):
         self.image_shape = (160, 320)
         self.vgg_path = "/home/robbie/spb_data/vgg"
         self.data_dir = "/home/robbie/spb_data"
-        self.runs_dir = "/home/robbie/spb_data"
         self.training_dir = "/home/robbie/spb_data/data_beer/training"
         self.model_ready = False
 
@@ -160,7 +159,7 @@ class beerClassifier(object):
 
 
         ## Save an example image----------- used for testing
-        # output_dir = os.path.join(self.runs_dir, str(time.time()))
+        # output_dir = os.path.join(self.data_dir, str(time.time()))
         # scipy.misc.imsave(os.path.join(self.data_dir, 'test', '0106_out.png'), image_out1)
 
         return image_out1, image_out2, image_out3
