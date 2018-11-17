@@ -230,9 +230,9 @@ class BeerDetector(object):
             self.pub10.publish(ros_img_ai_foam)
             self.pub11.publish(ros_img_ai_glass)
 
-        if not self.USE_AI:
-            self.pub7.publish(output_mm)
-            self.pub8.publish(ros_img_output)
+        # if not self.USE_AI:
+        self.pub7.publish(output_mm)
+        self.pub8.publish(ros_img_output)
 
 
     def reject_outliers(self,data, m = 1.):
