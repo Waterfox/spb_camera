@@ -4,6 +4,6 @@
        specific ROS_ROOT and ROS_PACKAGE_PATH values -->
   <!-- <machine name="local_alt" address="localhost" default="true" ros-root="/u/user/ros/ros/" ros-package-path="/u/user/ros/ros-pkg" /> -->
   <!-- a basic listener node -->
-  <node name="spb_node" pkg="spb_camera" type="spb_ai_node" />
+  <node name="spb_node" pkg="spb_camera" type="spb_ai_node.py" />
 
 </launch>
