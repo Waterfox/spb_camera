@@ -7,7 +7,6 @@ from std_msgs.msg import UInt16
 from cv_bridge import CvBridge
 import cv2
 import pickle
-from beer_classifier import beerClassifier
 import time
 # import serial
 
@@ -51,11 +50,12 @@ class BeerDetector(object):
 
 
         self.USE_LINES = False
-        self.USE_AREA = False
-        self.USE_AI = True
+        self.USE_AREA = True
+        self.USE_AI = False
 
         if self.USE_AI:
             self.beerClassifier = beerClassifier()
+            from beer_classifier import beerClassifier
             while self.beerClassifier.model_ready == False:
                 time.sleep(0.5)
 
@@ -114,7 +114,8 @@ class BeerDetector(object):
 
         #convert ROS img msg to OpenCV
         cv_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        cv_img1 = self.bridge.imgmsg_to_cv2(msg, "rgb8") #for AI
+        if self.USE_AI:
+            cv_img_rgb = self.bridge.imgmsg_to_cv2(msg, "rgb8") #for AI
         # if self.USE_LINES or self.USE_AREA:
         #undistort
         img_dst = cv2.undistort(cv_img, self.mtx, self.dist, None, self.mtx)
@@ -157,7 +158,7 @@ class BeerDetector(object):
 
         #AI (semantic segmentation) filter
         if self.USE_AI:
-            img_beer, img_foam, img_glass = self.beerClassifier.run_classifier(cv_img1)
+            img_beer, img_foam, img_glass = self.beerClassifier.run_classifier(cv_img_rgb)
             #resize the classified image, undistort it, crop it, find the top of the beer
 
             img_beer = np.array(img_beer)

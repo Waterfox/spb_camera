@@ -249,7 +249,7 @@ class BeerDetector(object):
         #threshold in HSV
         #red: h = 150:200
         lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([255, 150, 150]) #red
+        upper_hsv = np.array([255, 200, 180]) #red
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
         #threshold in grayscale
