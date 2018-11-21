@@ -4,6 +4,13 @@
        specific ROS_ROOT and ROS_PACKAGE_PATH values -->
   <!-- <machine name="local_alt" address="localhost" default="true" ros-root="/u/user/ros/ros/" ros-package-path="/u/user/ros/ros-pkg" /> -->
   <!-- a basic listener node -->
+  <include file="$(find pointgrey_camera_driver)/launch/camera.launch"/>
+
   <node name="spb_node" pkg="spb_camera" type="spb_ai_node.py" />
+
+  <node name="rosserial_machine" pkg="rosserial_python" type="serial_node.py">
+    <param name="port" value="/dev/ttyACM0" />
+    <param name="baud" value="500000"/>
+  </node>
 
 </launch>
