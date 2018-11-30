@@ -18,6 +18,8 @@ class surface_line(object):
         self.confidence = 0
         self.iteration = 0
         self.mv_avg = 4
+        self.tray_pos = 365
+        self.tray_pos_pix = 0
 
         self.max_confidence = 20
         self.locked_thresh = 5
@@ -61,6 +63,8 @@ class BeerDetector(object):
 
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
+        sub2 = rospy.Subscriber('/spb/tray_pos', UInt16, self.tray_cb, queue_size=1)
+
         if self.USE_LINES:
             self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
             self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
@@ -108,6 +112,23 @@ class BeerDetector(object):
         b = 130 - m * 300
         return m*lvl+b
 
+    def dist2pix(self,lvl_dist):
+        y1 = 130.
+        x1 = 300.
+        y2 = 193.
+        x2 = 700.
+        m = (y2-y1)/(x2-x1)
+        b = 130 - m * 300
+
+        lvl_pix = (lvl_dist - b)/m
+
+        return lvl_pix - self.cropTop
+
+
+
+    def tray_cb(self, msg):
+        self.tray_pos = msg.data
+        self.tray_pos_pix = self.dist2pix(self.tray_pos)
 
     def image_cb(self, msg):
 
@@ -283,7 +304,9 @@ class BeerDetector(object):
                     x1,y1,x2,y2 = line[0]
                     #filter by slope
                     m = (y2-y1)/(x2-x1)
-                    if abs(m) < 0.20 and x2 > L_x / 2.0:
+                    rospy.loginfo(self.tray_pos_pix-200)
+                    rospy.loginfo((y1+y2)/2.0)
+                    if abs(m) < 0.20 and x2 > L_x / 2.0 and (y1+y2)/2.0 < self.tray_pos_pix-200:
                         cv2.line(line_img_hough,(x1,y1),(x2,y2),(255,0,255),2)
                         Y.append(y1)
                         Y.append(y2) #finding more lines in the same area might weight the result in that region
