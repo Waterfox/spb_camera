@@ -8,7 +8,7 @@
 
   <node name="spb_node" pkg="spb_camera" type="spb_ai_node.py" output="screen"/>
 
-  <node name="rosserial_machine" pkg="rosserial_python" type="serial_node.py">
+  <node name="rosserial_machine" pkg="rosserial_python" type="serial_node.py" output="screen" >
     <param name="port" value="/dev/ttyACM0" />
     <param name="baud" value="500000"/>
   </node>

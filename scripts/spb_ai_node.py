@@ -18,8 +18,7 @@ class surface_line(object):
         self.confidence = 0
         self.iteration = 0
         self.mv_avg = 4
-        self.tray_pos = 365
-        self.tray_pos_pix = 0
+
 
         self.max_confidence = 20
         self.locked_thresh = 5
@@ -93,7 +92,8 @@ class BeerDetector(object):
         self.cropLeft = 400
         self.cropRight = 750
 
-
+        self.tray_pos = 365
+        self.tray_pos_pix = 0
 
         rate = rospy.Rate(20)
         rate.sleep()
@@ -157,9 +157,9 @@ class BeerDetector(object):
 
             #make an image and add the level line to it
             line_img1 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
-            cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(255,255,0),5)
+            cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(0,200,50),5)
             # img_out_lines = cv2.addWeighted(np.uint8(img_crop*255.0),0.8,line_img1, 1.,0.)
-            img_out_lines = cv2.add(np.uint8(img_crop*255.0),line_img1)
+            img_out_lines = cv2.add(np.uint8(img_crop),line_img1)
             # img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
             # img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
             range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
@@ -219,7 +219,7 @@ class BeerDetector(object):
 
         #temporary fix for area only output
         if output_mm <146.0: output_mm = 250
-        print output_mm
+        # rospy.loginfo(output_mm)
 
 
 
@@ -304,9 +304,11 @@ class BeerDetector(object):
                     x1,y1,x2,y2 = line[0]
                     #filter by slope
                     m = (y2-y1)/(x2-x1)
-                    rospy.loginfo(self.tray_pos_pix-200)
-                    rospy.loginfo((y1+y2)/2.0)
-                    if abs(m) < 0.20 and x2 > L_x / 2.0 and (y1+y2)/2.0 < self.tray_pos_pix-200:
+                    # rospy.loginfo(self.tray_pos_pix-200)
+                    # rospy.loginfo((y1+y2)/2.0)
+
+                    #if SLOPE m is less than 0.2, X2 on right, line above traypos -250pix
+                    if abs(m) < 0.20 and x2 > L_x / 2.0 and x1 < L_x/2.0 and (y1+y2)/2.0 < self.tray_pos_pix-250:
                         cv2.line(line_img_hough,(x1,y1),(x2,y2),(255,0,255),2)
                         Y.append(y1)
                         Y.append(y2) #finding more lines in the same area might weight the result in that region
@@ -324,8 +326,17 @@ class BeerDetector(object):
     def find_area(self,img_hsv, img_gray):
         #threshold in HSV
         #red: h = 150:200
+
+        #RICARDS RED
         lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([255, 180, 150]) #red
+        upper_hsv = np.array([255, 180, 150]) #red????
+        #RORSHACH OKTOBERFEST AMBER
+        # lower_hsv = np.array([0, 20, 60])
+        # upper_hsv = np.array([80, 220, 200])
+
+        # lower_hsv = np.array([0, 0, 0])
+        # upper_hsv = np.array([30, 255, 255])
+
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
         #threshold in grayscale
@@ -354,7 +365,7 @@ class BeerDetector(object):
         # x_pos = list()
         # y_pos = list()
 
-        line_thresh = 0.6
+        line_thresh = 0.5
         beer_line = 0
 
         ## Convolution based line finding
@@ -377,7 +388,7 @@ class BeerDetector(object):
         #         break
 
         ##Simple pixel based line finding - IMPLEMENT BETTER SEARCH
-        for yi in range(0,L_y,4):
+        for yi in range(0,L_y,2):
             # print sum(target[yi,:])
             # print line_thresh * L_x * 255.0
             if (sum(target[yi,:]) > line_thresh * L_x * 255.0):
