@@ -63,6 +63,7 @@ class BeerDetector(object):
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
         sub2 = rospy.Subscriber('/spb/tray_pos', UInt16, self.tray_cb, queue_size=1)
+        sub3 = rospy.Subscriber('/spb/ir', UInt16, self.top_ir_cb, queue_size=1)
 
         if self.USE_LINES:
             self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
@@ -91,9 +92,14 @@ class BeerDetector(object):
         self.cropBot = 1000
         self.cropLeft = 400
         self.cropRight = 750
+        self.img_width = self.cropRight-self.cropLeft
+        self.img_height = self.cropTop - self.cropBot
 
         self.tray_pos = 365
         self.tray_pos_pix = 0
+
+        self.top_ir = 365
+        self.top_ir_pix = 0
 
         rate = rospy.Rate(20)
         rate.sleep()
@@ -124,7 +130,9 @@ class BeerDetector(object):
 
         return lvl_pix - self.cropTop
 
-
+    def top_ir_cb(self, msg):
+        self.top_ir = msg.data
+        self.top_ir_pix = self.dist2pix(self.top_ir)
 
     def tray_cb(self, msg):
         self.tray_pos = msg.data
@@ -210,9 +218,12 @@ class BeerDetector(object):
              pix_output = 0
 
         #make the final output image
-        out_img = np.zeros((img_crop.shape[0],img_crop.shape[1],3), dtype=np.uint8)
-        cv2.line(out_img,(0,int(pix_output)),(650,int(pix_output)),(250,0,180),5)
-        img_output = cv2.addWeighted(img_crop,0.8,out_img, 1.,0.)
+        img_out = np.zeros((img_crop.shape[0],img_crop.shape[1],3), dtype=np.uint8)
+        cv2.line(img_out,(0,int(pix_output)),(self.img_width,int(pix_output)),(250,0,0),5)
+        cv2.line(img_out,(0,int(self.top_ir_pix)),(self.img_width,int(self.top_ir_pix)),(0,250,0),5)
+        cv2.line(img_out,(0,int(self.tray_pos_pix)),(self.img_width,int(self.tray_pos_pix)),(0,250,0),5)
+        # img_output = cv2.addWeighted(img_crop,0.8,out_img, 1.,0.)
+        img_output = cv2.add(img_crop,img_out)
 
         # output = self.area_tracker.y_val
         output_mm = self.pix2dist(pix_output)
