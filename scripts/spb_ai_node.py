@@ -221,7 +221,7 @@ class BeerDetector(object):
         img_out = np.zeros((img_crop.shape[0],img_crop.shape[1],3), dtype=np.uint8)
         cv2.line(img_out,(0,int(pix_output)),(self.img_width,int(pix_output)),(250,0,0),5)
         cv2.line(img_out,(0,int(self.top_ir_pix)),(self.img_width,int(self.top_ir_pix)),(0,250,0),5)
-        cv2.line(img_out,(0,int(self.tray_pos_pix)),(self.img_width,int(self.tray_pos_pix)),(0,250,0),5)
+        cv2.line(img_out,(0,int(self.tray_pos_pix)),(self.img_width,int(self.tray_pos_pix)),(0,0,250),5)
         # img_output = cv2.addWeighted(img_crop,0.8,out_img, 1.,0.)
         img_output = cv2.add(img_crop,img_out)
 
@@ -339,16 +339,21 @@ class BeerDetector(object):
         #red: h = 150:200
 
         #RICARDS RED
-        lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([255, 180, 150]) #red????
+        # lower_hsv = np.array([0, 0, 0])
+        # upper_hsv = np.array([255, 200, 170]) #red????
         #RORSHACH OKTOBERFEST AMBER
         # lower_hsv = np.array([0, 20, 60])
         # upper_hsv = np.array([80, 220, 200])
 
-        # lower_hsv = np.array([0, 0, 0])
-        # upper_hsv = np.array([30, 255, 255])
+        lower_hsv = np.array([0, 0, 0])
+        upper_hsv = np.array([15, 255, 255])
 
-        mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
+        lower_hsv2 = np.array([120, 0, 0])
+        upper_hsv2 = np.array([255, 255, 255])
+
+        # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
+        mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
+
         mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
         #threshold in grayscale
         # lower_gray = 200
