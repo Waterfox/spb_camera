@@ -178,10 +178,12 @@ class BeerDetector(object):
             self.area_tracker.update_sl(lvl_area)
 
             #make an image and add the level line to it
-            area_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
-            cv2.line(area_img,(0,lvl_area),(area_img.shape[0],lvl_area),(255,0,0),5)
+            # area_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
+            area_img = img_crop.copy()
+            cv2.line(area_img,(0,lvl_area),(area_img.shape[0],lvl_area),(250,125,0),5)
             # img_out_area = cv2.addWeighted(img_crop,0.8,area_img, 1.,0.)
-            img_out_area = cv2.add(img_crop,area_img)
+            # img_out_area = cv2.add(img_crop,area_img)
+            img_out_area = area_img
             # img_out_area = cv2.addWeighted(img_out_area,0.8,mask_and_3, 1.,0.)
             img_out_area = cv2.add(img_out_area,mask_and_3)
 
@@ -218,12 +220,13 @@ class BeerDetector(object):
              pix_output = 0
 
         #make the final output image
-        img_out = np.zeros((img_crop.shape[0],img_crop.shape[1],3), dtype=np.uint8)
-        cv2.line(img_out,(0,int(pix_output)),(self.img_width,int(pix_output)),(250,0,0),5)
-        cv2.line(img_out,(0,int(self.top_ir_pix)),(self.img_width,int(self.top_ir_pix)),(0,250,0),5)
-        cv2.line(img_out,(0,int(self.tray_pos_pix)),(self.img_width,int(self.tray_pos_pix)),(0,0,250),5)
+        # img_out = np.zeros((img_crop.shape[0],img_crop.shape[1],3), dtype=np.uint8)
+        img_output = img_crop.copy()
+        cv2.line(img_output,(0,int(pix_output)),(self.img_width,int(pix_output)),(200,0,0),5)
+        cv2.line(img_output,(0,int(self.top_ir_pix)),(self.img_width,int(self.top_ir_pix)),(0,200,0),5)
+        cv2.line(img_output,(0,int(self.tray_pos_pix)),(self.img_width,int(self.tray_pos_pix)),(0,0,200),5)
         # img_output = cv2.addWeighted(img_crop,0.8,out_img, 1.,0.)
-        img_output = cv2.add(img_crop,img_out)
+        # img_output = cv2.add(img_crop,img_out)
 
         # output = self.area_tracker.y_val
         output_mm = self.pix2dist(pix_output)
@@ -341,15 +344,13 @@ class BeerDetector(object):
         #RICARDS RED
         # lower_hsv = np.array([0, 0, 0])
         # upper_hsv = np.array([255, 200, 170]) #red????
-        #RORSHACH OKTOBERFEST AMBER
-        # lower_hsv = np.array([0, 20, 60])
-        # upper_hsv = np.array([80, 220, 200])
 
+        #RORSHACH OKTOBERFEST AMBER
         lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([15, 255, 255])
+        upper_hsv = np.array([15, 255, 220])
 
         lower_hsv2 = np.array([120, 0, 0])
-        upper_hsv2 = np.array([255, 255, 255])
+        upper_hsv2 = np.array([255, 255, 220])
 
         # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
@@ -381,7 +382,7 @@ class BeerDetector(object):
         # x_pos = list()
         # y_pos = list()
 
-        line_thresh = 0.5
+        line_thresh = 0.65
         beer_line = 0
 
         ## Convolution based line finding
