@@ -63,7 +63,8 @@ class BeerDetector(object):
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
         sub2 = rospy.Subscriber('/spb/tray_pos', UInt16, self.tray_cb, queue_size=1)
-        sub3 = rospy.Subscriber('/spb/ir', UInt16, self.top_ir_cb, queue_size=1)
+        sub3 = rospy.Subscriber('/spb/ir', UInt16, self.top_ir_cb, queue_size=10)
+        sub4 = rospy.Subscriber('/spb/us', UInt16, self.us_cb, queue_size=10)
 
         if self.USE_LINES:
             self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
@@ -101,6 +102,9 @@ class BeerDetector(object):
         self.top_ir = 365
         self.top_ir_pix = 0
 
+        self.us = 365
+        self.us_pix = 0
+
         rate = rospy.Rate(20)
         rate.sleep()
         rospy.spin()
@@ -137,6 +141,10 @@ class BeerDetector(object):
     def tray_cb(self, msg):
         self.tray_pos = msg.data
         self.tray_pos_pix = self.dist2pix(self.tray_pos)
+
+    def us_cb(self,msg):
+        self.us=msg.data
+        self.us_pix = self.dist2pix(self.us)
 
     def image_cb(self, msg):
 
@@ -225,6 +233,7 @@ class BeerDetector(object):
         cv2.line(img_output,(0,int(pix_output)),(self.img_width,int(pix_output)),(200,0,0),5)
         cv2.line(img_output,(0,int(self.top_ir_pix)),(self.img_width,int(self.top_ir_pix)),(0,200,0),5)
         cv2.line(img_output,(0,int(self.tray_pos_pix)),(self.img_width,int(self.tray_pos_pix)),(0,0,200),5)
+        cv2.line(img_output,(0,int(self.us_pix)),(self.img_width,int(self.us_pix)),(200,150,150),5)
         # img_output = cv2.addWeighted(img_crop,0.8,out_img, 1.,0.)
         # img_output = cv2.add(img_crop,img_out)
 
@@ -232,7 +241,7 @@ class BeerDetector(object):
         output_mm = self.pix2dist(pix_output)
 
         #temporary fix for area only output
-        if output_mm <146.0: output_mm = 250
+        if output_mm <146: output_mm = 999
         # rospy.loginfo(output_mm)
 
 
@@ -347,10 +356,10 @@ class BeerDetector(object):
 
         #RORSHACH OKTOBERFEST AMBER
         lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([15, 255, 220])
+        upper_hsv = np.array([25, 255, 230])
 
-        lower_hsv2 = np.array([120, 0, 0])
-        upper_hsv2 = np.array([255, 255, 220])
+        lower_hsv2 = np.array([100, 0, 0])
+        upper_hsv2 = np.array([255, 255, 230])
 
         # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
