@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import rospy
 import numpy as np
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import Int32
 from std_msgs.msg import UInt16
 from cv_bridge import CvBridge
@@ -50,7 +50,7 @@ class BeerDetector(object):
         self.bridge = CvBridge()
 
 
-        self.USE_LINES = True
+        self.USE_LINES = False
         self.USE_AREA = True
         self.USE_AI = False  #requires a 1070 GPU :S
 
@@ -61,7 +61,8 @@ class BeerDetector(object):
                 time.sleep(0.5)
 
         #subscribers & publishers
-        sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
+#        sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
+	sub1 = rospy.Subscriber('/raspicam_node/image/compressed', CompressedImage, self.image_cb, queue_size=1)
         sub2 = rospy.Subscriber('/spb/tray_pos', UInt16, self.tray_cb, queue_size=1)
         sub3 = rospy.Subscriber('/spb/ir', UInt16, self.top_ir_cb, queue_size=1)
 
@@ -80,14 +81,14 @@ class BeerDetector(object):
             self.pub10 = rospy.Publisher('/spb/image_ai_foam', Image, queue_size=1)
             self.pub11 = rospy.Publisher('/spb/image_ai_glass', Image, queue_size=1)
         #load camera calibration
-        camera_cal = pickle.load( open( "/home/robbie/spb_ws/src/spb_camera/camera_cal2.p", "rb" ) )
-        self.ret = camera_cal[0]
-        self.mtx = camera_cal[1]
-        self.dist = camera_cal[2]
+#        camera_cal = pickle.load( open( "/home/ubuntu/spb_ws/src/spb_camera/camera_cal2.p", "rb" ) )
+#        self.ret = camera_cal[0]
+#        self.mtx = camera_cal[1]
+#        self.dist = camera_cal[2]
         self.line_tracker = surface_line()
         self.area_tracker = surface_line()
 
-        self.img_shape = (964,1296)
+        self.img_shape = (720,1280)
         self.cropTop = 400
         self.cropBot = 1000
         self.cropLeft = 400
@@ -142,13 +143,14 @@ class BeerDetector(object):
 
 
         #convert ROS img msg to OpenCV
-        cv_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+        cv_img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
         if self.USE_AI:
             cv_img_rgb = self.bridge.imgmsg_to_cv2(msg, "rgb8") #for AI
         # if self.USE_LINES or self.USE_AREA:
         #undistort
-        img_dst = cv2.undistort(cv_img, self.mtx, self.dist, None, self.mtx)
-        #crop
+ #       img_dst = cv2.undistort(cv_img, self.mtx, self.dist, None, self.mtx)
+        img_dst=cv_img
+	#crop
         img_crop = img_dst[self.cropTop:self.cropBot,self.cropLeft:self.cropRight]
         #grayscale
         img_gray = cv2.cvtColor(img_crop,cv2.COLOR_BGR2GRAY)
