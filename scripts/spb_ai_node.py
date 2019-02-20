@@ -68,11 +68,11 @@ class BeerDetector(object):
 
         if self.USE_LINES:
             self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
-            self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
+            self.pub2 = rospy.Publisher('/spb/level_lines', UInt16, queue_size=1)
             self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
             self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
         if self.USE_AREA:
-            self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
+            self.pub5 = rospy.Publisher('/spb/level_area', UInt16, queue_size=1)
             self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
         self.pub7 = rospy.Publisher('/spb/lvl', UInt16, queue_size=1)
         self.pub8 = rospy.Publisher('/spb/image_output', Image, queue_size=1)
@@ -170,7 +170,8 @@ class BeerDetector(object):
         if self.USE_LINES:
             img_out_hough, range_sobely, lvl_lines = self.find_lines(img_hls,img_crop)
             self.line_tracker.update_sl(lvl_lines)
-
+            # output_lines_mm = self.pix2dist(self.line_tracker.y_val)
+            output_lines_mm = self.pix2dist(lvl_lines)
             #make an image and add the level line to it
             line_img1 = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
             cv2.line(line_img1,(0,lvl_lines),(650,lvl_lines),(0,200,50),5)
@@ -180,11 +181,13 @@ class BeerDetector(object):
             # img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
             range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
 
+
         #Area filter ------------------
         if self.USE_AREA:
             lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
             self.area_tracker.update_sl(lvl_area)
-
+            # output_area_mm = self.pix2dist(self.area_tracker.y_val)
+            output_area_mm = self.pix2dist(lvl_area)
             #make an image and add the level line to it
             # area_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
             area_img = img_crop.copy()
@@ -194,6 +197,7 @@ class BeerDetector(object):
             img_out_area = area_img
             # img_out_area = cv2.addWeighted(img_out_area,0.8,mask_and_3, 1.,0.)
             img_out_area = cv2.add(img_out_area,mask_and_3)
+
 
         #AI (semantic segmentation) filter
         if self.USE_AI:
@@ -264,11 +268,11 @@ class BeerDetector(object):
 
         if self.USE_LINES:
             self.pub1.publish(ros_img_lines)
-            self.pub2.publish(lvl_lines)
+            self.pub2.publish(output_lines_mm)
             self.pub3.publish(ros_sobel_img)
             self.pub4.publish(ros_hough_img)
         if self.USE_AREA:
-            self.pub5.publish(lvl_area)
+            self.pub5.publish(output_area_mm)
             self.pub6.publish(ros_img_area)
         if self.USE_AI:
             self.pub9.publish(ros_img_ai_beer)
@@ -355,10 +359,10 @@ class BeerDetector(object):
         # upper_hsv = np.array([255, 200, 170]) #red????
 
         #RORSHACH OKTOBERFEST AMBER
-        lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([25, 255, 230])
+        lower_hsv = np.array([0, 0, 50])
+        upper_hsv = np.array([18, 255, 230])
 
-        lower_hsv2 = np.array([100, 0, 0])
+        lower_hsv2 = np.array([100, 0, 50])
         upper_hsv2 = np.array([255, 255, 230])
 
         # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)

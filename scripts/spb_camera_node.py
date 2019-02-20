@@ -50,10 +50,10 @@ class BeerDetector(object):
         #subscribers & publishers
         sub1 = rospy.Subscriber('/camera/image_color', Image, self.image_cb, queue_size=1)
         self.pub1 = rospy.Publisher('/spb/image_lines', Image, queue_size=1)
-        self.pub2 = rospy.Publisher('/spb/level_lines', Int32, queue_size=1)
+        self.pub2 = rospy.Publisher('/spb/level_lines', UInt16, queue_size=1)
         self.pub3 = rospy.Publisher('/spb/sobely', Image, queue_size=1)
         self.pub4 = rospy.Publisher('/spb/houghlines', Image, queue_size=1)
-        self.pub5 = rospy.Publisher('/spb/level_area', Int32, queue_size=1)
+        self.pub5 = rospy.Publisher('/spb/level_area', UInt16, queue_size=1)
         self.pub6 = rospy.Publisher('/spb/image_area', Image, queue_size=1)
         self.pub7 = rospy.Publisher('/spb/lvl', UInt16, queue_size=1)
         self.pub8 = rospy.Publisher('/spb/image_output', Image, queue_size=1)
@@ -121,11 +121,13 @@ class BeerDetector(object):
             # img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
             # img_out_lines = cv2.addWeighted(img_crop,0.8,line_img1, 1.,0.)
             range_sobely_col = np.dstack([range_sobely*0,range_sobely,range_sobely])
+            output_lines_mm = self.pix2dist(lvl_lines)
 
         #Area filter ------------------
         if self.USE_AREA:
             lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
             self.area_tracker.update_sl(lvl_area)
+            output_area_mm = self.pix2dist(lvl_area)
 
         area_img = np.zeros((img_gray.shape[0],img_gray.shape[1],3), dtype=np.uint8)
         cv2.line(area_img,(0,lvl_area),(area_img.shape[0],lvl_area),(255,0,0),5)
@@ -173,11 +175,11 @@ class BeerDetector(object):
 
         if self.USE_LINES:
             self.pub1.publish(ros_img_lines)
-            self.pub2.publish(lvl_lines)
+            self.pub2.publish(output_lines_mm)
             self.pub3.publish(ros_sobel_img)
             self.pub4.publish(ros_hough_img)
         if self.USE_AREA:
-            self.pub5.publish(lvl_area)
+            self.pub5.publish(output_area_mm)
             self.pub6.publish(ros_img_area)
         self.pub7.publish(output_mm)
         self.pub8.publish(ros_img_output)
