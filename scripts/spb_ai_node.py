@@ -359,11 +359,18 @@ class BeerDetector(object):
         # upper_hsv = np.array([255, 200, 170]) #red????
 
         #RORSHACH OKTOBERFEST AMBER
-        lower_hsv = np.array([0, 0, 50])
-        upper_hsv = np.array([18, 255, 230])
+        # lower_hsv = np.array([0, 0, 50])
+        # upper_hsv = np.array([18, 255, 230])
+        #
+        # lower_hsv2 = np.array([100, 0, 50])
+        # upper_hsv2 = np.array([255, 255, 230])
 
-        lower_hsv2 = np.array([100, 0, 50])
-        upper_hsv2 = np.array([255, 255, 230])
+        #COORS BANQUET
+        lower_hsv = np.array([0, 0, 0])
+        upper_hsv = np.array([10, 255, 230])
+
+        lower_hsv2 = np.array([10, 0, 0])
+        upper_hsv2 = np.array([150, 255, 230])
 
         # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
         mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
