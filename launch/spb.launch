@@ -13,7 +13,7 @@
     <param name="baud" value="500000"/>
   </node>
 
-  <param name="useGHD" type="int" value="0" />
+  <param name="useGHD" type="int" value="1" />
   <param name="GH" type="int" value="151" />
   <param name="GB" type="int" value="10" />   
 </launch>

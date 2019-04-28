@@ -53,6 +53,7 @@ class BeerDetector(object):
         self.USE_LINES = True
         self.USE_AREA = True
         self.USE_AI = False  #requires a 1070 GPU :S
+        self.FIND_FOAM = True
 
         if self.USE_AI:
             self.beerClassifier = beerClassifier()
@@ -80,6 +81,10 @@ class BeerDetector(object):
             self.pub9 = rospy.Publisher('/spb/image_ai_beer', Image, queue_size=1)
             self.pub10 = rospy.Publisher('/spb/image_ai_foam', Image, queue_size=1)
             self.pub11 = rospy.Publisher('/spb/image_ai_glass', Image, queue_size=1)
+        if self.FIND_FOAM:
+            self.pub12 = rospy.Publisher('/spb/image_foam', Image, queue_size=1)
+            self.pub13 = rospy.Publisher('/spb/level_foam', UInt16, queue_size=1)
+
         #load camera calibration
         camera_cal = pickle.load( open( "/home/robbie/spb_ws/src/spb_camera/camera_cal2.p", "rb" ) )
         self.ret = camera_cal[0]
@@ -184,7 +189,7 @@ class BeerDetector(object):
 
         #Area filter ------------------
         if self.USE_AREA:
-            lvl_area, mask_and_3 = self.find_area(img_hsv, img_gray)
+            lvl_area, mask_and_3 = self.find_area(img_hsv)
             self.area_tracker.update_sl(lvl_area)
             # output_area_mm = self.pix2dist(self.area_tracker.y_val)
             output_area_mm = self.pix2dist(lvl_area)
@@ -217,7 +222,9 @@ class BeerDetector(object):
             # img_beer_dst = cv2.undistort(img_beer_res, self.mtx, self.dist, None, self.mtx)
             # img_beer_crop = img_beer_dst[self.cropTop:self.cropBot,self.cropLeft:self.cropRight]
 
-
+        if self.FIND_FOAM:
+            lvl_foam, img_foamy = self.find_foam(img_hsv)
+            lvl_foam_mm = self.pix2dist(lvl_foam)
 
         #combine surface lvls from lines and area filters
 
@@ -261,6 +268,8 @@ class BeerDetector(object):
             ros_img_ai_beer = self.bridge.cv2_to_imgmsg(img_beer, "bgr8")
             ros_img_ai_foam = self.bridge.cv2_to_imgmsg(img_foam, "bgr8")
             ros_img_ai_glass = self.bridge.cv2_to_imgmsg(img_glass, "bgr8")
+        if self.FIND_FOAM:
+            ros_img_foam = self.bridge.cv2_to_imgmsg(img_foamy, "bgr8")
 
         ros_img_output = self.bridge.cv2_to_imgmsg(img_output, "bgr8")
 
@@ -278,6 +287,9 @@ class BeerDetector(object):
             self.pub9.publish(ros_img_ai_beer)
             self.pub10.publish(ros_img_ai_foam)
             self.pub11.publish(ros_img_ai_glass)
+        if self.FIND_FOAM:
+            self.pub12.publish(ros_img_foam)
+            self.pub13.publish(lvl_foam_mm)
 
         # if not self.USE_AI:
         self.pub7.publish(output_mm)
@@ -350,7 +362,7 @@ class BeerDetector(object):
 
         return img_out_hough, range_sobely, mY
 
-    def find_area(self,img_hsv, img_gray):
+    def find_area(self,img_hsv):
         #threshold in HSV
         #red: h = 150:200
 
@@ -364,30 +376,21 @@ class BeerDetector(object):
         #
         # lower_hsv2 = np.array([100, 0, 50])
         # upper_hsv2 = np.array([255, 255, 230])
+        # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
 
         #COORS BANQUET
         lower_hsv = np.array([0, 0, 0])
-        upper_hsv = np.array([10, 255, 230])
+        upper_hsv = np.array([170, 255, 230])
 
-        lower_hsv2 = np.array([10, 0, 0])
-        upper_hsv2 = np.array([150, 255, 230])
 
         # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
-        mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
+        mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)#+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
 
         mask_hsv_3 = np.dstack([mask_hsv*0,mask_hsv,mask_hsv])
-        #threshold in grayscale
-        # lower_gray = 200
-        # upper_gray = 255
-        # mask_gray = cv2.inRange(np.uint8(img_gray*255),lower_gray,upper_gray)
-        # mask_gray_3 = np.dstack([mask_gray*0,mask_gray*0,mask_gray*1])
-        #combine masks
-        # mask_and = cv2.bitwise_and(mask_gray,mask_hsv)
-        # mask_and_3 = np.dstack([mask_and*0,mask_and*0,mask_and*1])
+
         #match filter - overkill, could just add lines
-        # target = mask_and.astype(np.float)
-        # target = mask_gray.astype(np.float)
-        # target = mask_hsv.astype(np.float)
+
+
         target = mask_hsv
         L_y = len(target[:,0])
         L_x = len(target[0,:])
@@ -395,18 +398,11 @@ class BeerDetector(object):
         # win_y = 5
         # win_x = L_x
 
-        #detection threshold = increase probability of line detection, sensitivity to noise
-        # peak_thresh = 10 #threshold for detecting a peak in a single convolution line Note win_x size = 20  12/20 = 60% of pixels
-        # peak_thresh = peak_thresh*win_y  #threshold for detecting a peak over the y_window
-
-        # x_pos = list()
-        # y_pos = list()
-
-        line_thresh = 0.65
-        beer_line = 0
-
-        ## Convolution based line finding
+        ## Convolution based line finding----------------------------
+        # line_thresh = 0.65
+        # beer_line = 0
         #convolution window. zeros with a ones in the center of length win_x
+        # target = mask_hsv.astype(np.float)
         # window = np.zeros_like(target[:,0])
 
         # window[int(L_y/2-win_y/2):int(L_y/2+win_y/2)] = 1.0
@@ -424,7 +420,9 @@ class BeerDetector(object):
         #         beer_line = yi;
         #         break
 
-        ##Simple pixel based line finding - IMPLEMENT BETTER SEARCH
+        ##Simple pixel based line finding - IMPLEMENT BETTER SEARCH ----------------
+        line_thresh = 0.65
+        beer_line = 0
         for yi in range(0,L_y,2):
             # print sum(target[yi,:])
             # print line_thresh * L_x * 255.0
@@ -435,6 +433,40 @@ class BeerDetector(object):
         # return beer_line,mask_and_3
         # mask_gray_3
         # return beer_line,mask_gray_3
+
+        return beer_line,mask_hsv_3
+
+    def find_foam(self,img_hsv):
+
+        #low   200,44, 41
+        #hi: 181, 49,41
+
+        lower_hsv = np.array([90, 170, 180])
+        upper_hsv = np.array([110, 255, 255])
+
+        # mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)
+        mask_hsv = cv2.inRange(img_hsv, lower_hsv, upper_hsv)#+cv2.inRange(img_hsv, lower_hsv2, upper_hsv2)
+
+        mask_hsv_3 = np.dstack([mask_hsv,mask_hsv*0,mask_hsv])
+
+        #match filter - overkill, could just add lines
+        target = mask_hsv
+        L_y = len(target[:,0])
+        L_x = len(target[0,:])
+
+        # print(L_x,L_y)
+        # win_y = 5
+        # win_x = L_x
+
+        ##Simple pixel based line finding - IMPLEMENT BETTER SEARCH ----------------
+        line_thresh = 0.03
+        beer_line = L_y
+        for yi in range(0,L_y,2):
+            # print sum(target[yi,:])
+            # print line_thresh * L_x * 255.0
+            if (sum(target[yi,:]) < line_thresh * L_x * 255.0):
+                foam_line = yi
+                break
 
         return beer_line,mask_hsv_3
 
